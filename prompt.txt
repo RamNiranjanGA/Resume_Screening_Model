@@ -1,0 +1,88 @@
+AI video-resume screening — page-by-page build spec
+Use each section below as a standalone prompt (for yourself, or to paste into an AI coding tool) when building that page. Every page lists: purpose, elements, states, and edge cases to handle.
+
+1. Home / landing page
+Prompt: Build a landing page for an AI-powered hiring platform. It should have a header with logo and nav (Jobs, About, Login), a hero section explaining "Apply with a video or voice intro instead of a resume," a short 3-step "how it works" section (Record your intro → AI matches you to the job → Get an instant response), and a footer with links to Privacy Policy, Terms, and Contact/Support.
+
+States: default. No auth-gated content here.
+
+2. Job listings page
+Prompt: Build a page listing open job postings as cards. Each card shows job title, company/team, location, and a short one-line summary, with an "Apply" button. Include a search bar and filters (location, role type). Show a clear empty state ("No jobs match your filters") if search returns nothing.
+
+States: loading (skeleton cards), populated, empty/no-results, error (failed to load jobs — show a retry button).
+
+3. Job detail page (JD page)
+Prompt: Build a page showing one job's full description: title, department, location, responsibilities, requirements, and a prominent "Apply with video/voice intro" button. Include a short note explaining what happens next ("Record a 60-90 second intro. Our AI will match it to this role and respond within X").
+
+States: loading, loaded, job not found (redirect to a friendly "This job is no longer available" message with a link back to listings).
+
+4. Consent page
+Prompt: Build a consent screen shown before recording starts. It must clearly state: the recording will be analyzed by AI, what data is stored (recording, transcript, score), how long it's retained, and that the candidate can request deletion. Include a checkbox "I understand and consent" that must be checked before the "Continue" button becomes active. Include a link to the full Privacy Policy.
+
+States: unchecked (Continue disabled), checked (Continue enabled). This page must always appear before any recording/upload UI — never skip it.
+
+5. Recording / upload page
+Prompt: Build the core application page. It should let the candidate either (a) record directly in the browser using the microphone/camera, or (b) upload a pre-recorded video or audio file. Show a live preview during recording, a timer, and a re-record option before submitting. Show accepted file types and a max file size/duration limit clearly (e.g. "Max 2 minutes, .mp4/.mov/.mp3/.wav, up to 100MB").
+
+States:
+
+idle (choose record or upload)
+recording in progress (timer visible, stop button)
+recorded/uploaded, previewing (playback + "re-record" + "submit" options)
+uploading (progress bar)
+submit failed (network/file-too-large error, with retry)
+browser doesn't support recording (fall back to upload-only, with a message explaining why)
+6. Submission confirmation page
+Prompt: Build a simple confirmation page shown right after successful submission. Confirm what was submitted (job title, candidate name, timestamp), explain that processing may take a few minutes, and state how they'll be notified (email). Include a "Back to job listings" link.
+
+States: default only — this page always shows the same content on success.
+
+7. Processing / status page (optional, if not purely email-based)
+Prompt: Build a status page a candidate can revisit (via a link sent by email or a "check status" page) to see their application state: Received → Processing → Decision made. Show a simple progress indicator, not detailed AI internals (never expose raw scores or reasoning to candidates directly).
+
+States: received, processing, decided (with a link to view the decision — same content as what was emailed), expired/not found (invalid or old link).
+
+8. Result page or email (candidate-facing)
+Prompt: Write two templates: a "selected" email/message and a "not selected" email/message. Both should be warm and professional, reference the specific job title, and give a clear next step (selected: link to schedule next round; not selected: brief thanks, no generic rejection boilerplate, optionally an invite to apply to future roles). Never expose raw AI scores, confidence numbers, or internal reasoning in candidate-facing text.
+
+States: selected, not selected. Consider a third state for borderline scores routed to manual human review instead of an automatic decision.
+
+9. Admin/recruiter login page
+Prompt: Build a simple login page (email + password, or SSO if you have it) restricted to recruiter/admin accounts. Include "forgot password" flow and clear error messaging for invalid credentials — never reveal whether the email exists or not (say "Invalid email or password" generically, for security).
+
+States: default, invalid credentials, account locked (if you implement rate limiting), password reset sent.
+
+10. Admin — post a job page
+Prompt: Build a form for recruiters to create/edit a job posting: title, department, location, description, requirements, and a field for the must-have skills the AI should weight most heavily when matching. Include a preview before publishing and a draft/publish toggle.
+
+States: empty form, validation errors (missing required fields), saved as draft, published, edit-existing-job (pre-filled form).
+
+11. Admin — candidates dashboard
+Prompt: Build a table/list of all candidates who've applied, filterable by job and by decision (selected/not selected/pending/manual review). Each row shows candidate name, job applied to, AI score, decision, and submission date, with a link to view details.
+
+States: loading, populated, empty ("No applications yet for this job"), filtered-empty.
+
+12. Admin — candidate detail page
+Prompt: Build a detail view for one candidate's submission: video/audio playback, full transcript, the AI's match score and reasoning, and the automatic decision. Include a manual override control (recruiter can flag "override to selected" or "override to not selected" with a required reason field) — this matters for accountability and catching AI mistakes.
+
+States: default view, override-in-progress (reason field required before saving), override saved (show both AI decision and human override clearly, not just the final one — for audit purposes).
+
+13. Error pages
+Prompt — 404 page: Build a "page not found" screen with a friendly message, a search bar or link back to job listings, and no technical jargon.
+
+Prompt — 500 / server error page: Build a generic error screen ("Something went wrong on our end") with a retry button and a support contact link. Never show raw stack traces or technical error details to end users.
+
+Prompt — upload/processing failure state: Shown inline on the recording page or status page when transcription or AI matching fails. Message: "We couldn't process your submission. Please try again, or contact support if this keeps happening." Include a retry button and a support link.
+
+14. Support / contact / FAQ page
+Prompt: Build a support page with a short FAQ (What happens to my recording? How is the decision made? Can I request a human review? How do I delete my data?) and a contact form or support email link for anything not covered. Keep answers in plain language, no internal AI jargon.
+
+15. Privacy policy & terms page
+Prompt: Build a standard privacy policy page covering: what's recorded and why, how long it's stored, who can access it (recruiters at the hiring company, not shared externally), how AI is used in the decision, and how to request data deletion. This should be linked from the consent page (#4) and the footer of every page.
+
+Cross-cutting notes for every page
+Consent before recording, always — page #4 must gate access to page #5, no exceptions.
+Never surface raw AI scores or reasoning to candidates — only recruiters see that (page #12).
+Every error state needs a human way out — a retry button, a support link, or both. Never a dead end.
+Loading states everywhere — any page that fetches data (jobs, candidate lists, status) needs a loading skeleton, not a blank screen.
+Mobile-friendly recording UI — many candidates will apply from their phone; the record/upload flow especially needs to work well on mobile browsers.
