@@ -88,7 +88,6 @@ CREATE POLICY "Allow authenticated recruiters to read candidates"
 CREATE POLICY "Allow public insert for application submissions"
   ON public.candidates
   FOR INSERT
-  USING (true)
   WITH CHECK (true);
 
 CREATE POLICY "Allow authenticated recruiters to update candidates"
@@ -104,7 +103,6 @@ DROP POLICY IF EXISTS "Allow all application operations" ON public.applications;
 CREATE POLICY "Allow public application insert"
   ON public.applications
   FOR INSERT
-  USING (true)
   WITH CHECK (true);
 
 CREATE POLICY "Allow public token lookup for status page"
