@@ -2,18 +2,22 @@
 // SHARED ADMIN SIDEBAR COMPONENT
 // Used by Pages 10, 11, 12 — the admin-facing portal.
 //
-// Props:
-//   activeRoute — current path, used to highlight active item
+// Phase 2: Connected to real Supabase Auth.
+//   - Logout button calls signOut() from auth service
+//   - User email shown in the bottom bar
+//   - Falls back gracefully if auth is unavailable
 // ============================================================
 
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import {
   Zap, Briefcase, Users,
-  LogOut, PlusCircle, ChevronRight
+  LogOut, PlusCircle, ChevronRight, Loader
 } from 'lucide-react';
+import { signOut, getUser } from '@/lib/auth';
 
 interface AdminSidebarProps {
   /** Optional: collapse sidebar to icon-only on very small containers */
@@ -38,10 +42,31 @@ const NAV_ITEMS = [
 
 export default function AdminSidebar({ compact }: AdminSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Load authenticated user's email for display
+  useEffect(() => {
+    getUser().then(user => {
+      if (user?.email) setUserEmail(user.email);
+    });
+  }, []);
 
   const isActive = (href: string) => {
     if (href === '/admin/candidates') return pathname === href || pathname === '/admin/candidates';
     return pathname === href || pathname.startsWith(href + '/');
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+      router.push('/admin/login');
+      router.refresh(); // Force middleware to see cleared session
+    } catch {
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -110,16 +135,37 @@ export default function AdminSidebar({ compact }: AdminSidebarProps) {
         })}
       </nav>
 
-      {/* Bottom section */}
+      {/* Bottom section — user info + logout */}
       <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '0.75rem 0' }}>
+        {/* User email pill */}
+        {!compact && userEmail && (
+          <div style={{
+            margin: '0 0.75rem 0.5rem',
+            padding: '0.4rem 0.65rem',
+            background: 'rgba(124,58,237,0.08)',
+            border: '1px solid rgba(124,58,237,0.18)',
+            borderRadius: 8,
+            overflow: 'hidden',
+          }}>
+            <p style={{ fontSize: '0.65rem', color: '#A78BFA', fontWeight: 600, letterSpacing: '0.04em', marginBottom: '0.1rem' }}>SIGNED IN AS</p>
+            <p style={{
+              fontSize: '0.72rem', color: 'var(--text-secondary)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {userEmail}
+            </p>
+          </div>
+        )}
+
         <button
           className="sidebar-item"
-          onClick={() => { window.location.href = '/admin/login'; }}
+          onClick={handleLogout}
+          disabled={loggingOut}
           aria-label="Log out of recruiter portal"
-          style={{ width: '100%', color: '#FCA5A5' }}
+          style={{ width: '100%', color: loggingOut ? 'var(--text-muted)' : '#FCA5A5', cursor: loggingOut ? 'wait' : 'pointer' }}
         >
-          <LogOut size={18} />
-          {!compact && <span>Log Out</span>}
+          {loggingOut ? <Loader size={18} style={{ animation: 'admin-spin 1s linear infinite' }} /> : <LogOut size={18} />}
+          {!compact && <span>{loggingOut ? 'Signing out…' : 'Log Out'}</span>}
         </button>
       </div>
     </aside>

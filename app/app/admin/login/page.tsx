@@ -51,9 +51,10 @@
 
 'use client';
 
-import { useState, useEffect, useRef, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { signInWithEmail, sendPasswordReset } from '@/lib/auth';
 import {
   Zap, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle,
   CheckCircle2, Shield, KeyRound, ChevronLeft, Loader,
@@ -247,8 +248,10 @@ function SSOButton({ isLoading, onClick }: { isLoading: boolean; onClick: () => 
 // ─────────────────────────────────────────────
 // MAIN PAGE COMPONENT
 // ─────────────────────────────────────────────
-export default function AdminLoginPage() {
+function AdminLoginInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirectTo') || '/admin/candidates';
   const emailRef  = useRef<HTMLInputElement>(null);
 
   const [view, setView] = useState<PageView>('login');
@@ -315,27 +318,28 @@ export default function AdminLoginPage() {
   };
 
   // ── Login submit ──
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     if (loginStatus === 'loading' || loginStatus === 'locked') return;
     if (!validateLogin()) return;
 
     setLoginStatus('loading');
 
-    setTimeout(() => {
-      if (email.trim().toLowerCase() === DEMO_EMAIL.toLowerCase() && password === DEMO_PASSWORD) {
-        router.push('/admin/candidates');
+    const result = await signInWithEmail(email, password);
+
+    if (result.success) {
+      router.push(redirectTo);
+      router.refresh(); // Ensure middleware re-evaluates the new session
+    } else {
+      const newFail = failCount + 1;
+      setFailCount(newFail);
+      if (newFail >= MAX_ATTEMPTS || result.error === 'rate_limited') {
+        setLoginStatus('locked');
+        setLockedAt(Date.now());
       } else {
-        const newFail = failCount + 1;
-        setFailCount(newFail);
-        if (newFail >= MAX_ATTEMPTS) {
-          setLoginStatus('locked');
-          setLockedAt(Date.now());
-        } else {
-          setLoginStatus('error_credentials');
-        }
+        setLoginStatus('error_credentials');
       }
-    }, 800);
+    }
   };
 
   const handleLockExpire = () => {
@@ -346,7 +350,7 @@ export default function AdminLoginPage() {
   };
 
   // ── Forgot password submit ──
-  const handleForgotSubmit = (e: FormEvent) => {
+  const handleForgotSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (forgotStatus === 'loading') return;
 
@@ -355,7 +359,9 @@ export default function AdminLoginPage() {
 
     setResetEmailError('');
     setForgotStatus('loading');
-    setTimeout(() => setForgotStatus('sent'), 1000);
+    // sendPasswordReset always returns success (security: never reveal email existence)
+    await sendPasswordReset(resetEmail);
+    setForgotStatus('sent');
   };
 
   // ── SSO demo ──
@@ -781,5 +787,18 @@ export default function AdminLoginPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PAGE EXPORT — wrapped in Suspense so
+// useSearchParams() doesn't break static
+// pre-rendering in Next.js 16.
+// ─────────────────────────────────────────────
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />}>
+      <AdminLoginInner />
+    </Suspense>
   );
 }
