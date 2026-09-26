@@ -48,12 +48,13 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { getCandidateById, getJobById, getRelativeTime } from '@/lib/mock-data';
-import { DecisionType } from '@/lib/types';
+import { fetchCandidateById, updateCandidateManualOverride, fetchJobById } from '@/lib/db';
+import { Candidate, DecisionType } from '@/lib/types';
 import {
   ChevronLeft, User, Mail, Briefcase, Calendar,
   Brain, FileText, Video, Shield, ShieldCheck,
@@ -291,8 +292,20 @@ export default function CandidateDetailPage() {
   const router = useRouter();
   const id = params.id as string;
 
-  const candidate = getCandidateById(id);
-  const job = candidate ? getJobById(candidate.jobId) : undefined;
+  const [candidate, setCandidate] = useState<Candidate | null>(getCandidateById(id) || null);
+  const [job, setJob] = useState(candidate ? getJobById(candidate.jobId) : undefined);
+
+  useEffect(() => {
+    fetchCandidateById(id).then(cand => {
+      if (cand) {
+        setCandidate(cand);
+        if (cand.manualOverride) setLocalOverride(cand.manualOverride);
+        fetchJobById(cand.jobId).then(j => {
+          if (j) setJob(j);
+        });
+      }
+    });
+  }, [id]);
 
   // Override state
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -308,20 +321,24 @@ export default function CandidateDetailPage() {
   // Effective decision (override takes precedence)
   const effectiveDecision = localOverride?.decision ?? candidate?.decision ?? 'pending';
 
-  const handleOverrideSubmit = (decision: DecisionType, reason: string) => {
+  const handleOverrideSubmit = async (decision: DecisionType, reason: string) => {
     setOverrideSaving(true);
-    setTimeout(() => {
-      setLocalOverride({
-        decision,
-        reason,
-        overriddenBy: 'admin@luminaryhire.com',
-        overriddenAt: new Date().toISOString(),
-      });
-      setOverrideSaving(false);
-      setShowOverrideModal(false);
-      setOverrideSuccess(true);
-      setTimeout(() => setOverrideSuccess(false), 4000);
-    }, 1000);
+    const overrideRecord = {
+      decision,
+      reason,
+      overriddenBy: 'admin@luminaryhire.com',
+      overriddenAt: new Date().toISOString(),
+    };
+
+    // Save to Supabase (resilient with local update)
+    await updateCandidateManualOverride(id, overrideRecord);
+
+    setLocalOverride(overrideRecord);
+    setCandidate(prev => prev ? { ...prev, decision, manualOverride: overrideRecord } : null);
+    setOverrideSaving(false);
+    setShowOverrideModal(false);
+    setOverrideSuccess(true);
+    setTimeout(() => setOverrideSuccess(false), 4000);
   };
 
   // ── Avatar helper ──

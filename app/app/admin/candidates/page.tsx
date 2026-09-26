@@ -59,10 +59,11 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { MOCK_CANDIDATES, MOCK_JOBS, getRelativeTime } from '@/lib/mock-data';
+import { fetchCandidates } from '@/lib/db';
 import { Candidate, DecisionType, ApplicationStatus } from '@/lib/types';
 import {
   Users, CheckCircle2, XCircle, AlertTriangle, Clock,
@@ -254,7 +255,13 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 // MAIN PAGE
 // ─────────────────────────────────────────────
 export default function CandidatesDashboard() {
-  const candidates = MOCK_CANDIDATES;
+  const [candidates, setCandidates] = useState<Candidate[]>(MOCK_CANDIDATES);
+
+  useEffect(() => {
+    fetchCandidates().then(data => {
+      if (data && data.length > 0) setCandidates(data);
+    });
+  }, []);
 
   // ── Filters ──
   const [searchQuery, setSearchQuery] = useState('');

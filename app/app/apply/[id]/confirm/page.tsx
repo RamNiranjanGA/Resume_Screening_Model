@@ -28,11 +28,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getJobById } from '@/lib/mock-data';
+import { fetchJobById } from '@/lib/db';
 import { Job } from '@/lib/types';
 import {
   CheckCircle2, ArrowRight, Briefcase, Mail, Clock,
@@ -146,7 +147,9 @@ function NextStepCard({
 // ─────────────────────────────────────────────
 export default function ConfirmationPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const jobId = params.id as string;
+  const token = searchParams.get('token');
 
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,13 +158,16 @@ export default function ConfirmationPage() {
 
   // ── Fetch job on mount ──
   useEffect(() => {
-    const foundJob = getJobById(jobId);
-    if (foundJob) {
-      setJob(foundJob);
-    } else {
-      setNotFound(true);
-    }
-    setLoading(false);
+    fetchJobById(jobId).then(foundJob => {
+      if (foundJob) {
+        setJob(foundJob);
+      } else {
+        const local = getJobById(jobId);
+        if (local) setJob(local);
+        else setNotFound(true);
+      }
+      setLoading(false);
+    });
   }, [jobId]);
 
   // ── Format the submission timestamp ──
@@ -399,9 +405,19 @@ export default function ConfirmationPage() {
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                {token && (
+                  <Link
+                    href={`/status/${token}`}
+                    className="btn-primary"
+                    id="confirm-track-status-btn"
+                    style={{ padding: '0.85rem 2rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    <Clock size={16} /> Track Application Status
+                  </Link>
+                )}
                 <Link
                   href="/jobs"
-                  className="btn-primary"
+                  className={token ? "btn-secondary" : "btn-primary"}
                   id="confirm-back-to-listings-btn"
                   style={{ padding: '0.85rem 2rem', fontSize: '0.95rem' }}
                 >

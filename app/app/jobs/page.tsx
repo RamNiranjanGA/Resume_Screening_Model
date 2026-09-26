@@ -26,6 +26,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { MOCK_JOBS } from '@/lib/mock-data';
+import { fetchJobs } from '@/lib/db';
 import { Job, JobType } from '@/lib/types';
 import {
   Search, MapPin, Briefcase, Users, Clock,
@@ -193,18 +194,21 @@ export default function JobsPage() {
   const [typeFilter, setTypeFilter]   = useState<JobType | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // ── Simulated async fetch ──
-  // In production this would be: fetch('/api/jobs')
+  // ── Supabase + fallback fetch ──
   const loadJobs = useCallback(async (simulateError = false) => {
     setPageState('loading');
-    await new Promise(r => setTimeout(r, 1200)); // realistic loading feel
-
     if (simulateError) {
+      await new Promise(r => setTimeout(r, 600));
       setPageState('error');
       return;
     }
-    setJobs(MOCK_JOBS.filter(j => j.status === 'published'));
-    setPageState('populated');
+    try {
+      const data = await fetchJobs();
+      setJobs(data.filter(j => j.status === 'published'));
+      setPageState('populated');
+    } catch {
+      setPageState('error');
+    }
   }, []);
 
   useEffect(() => {

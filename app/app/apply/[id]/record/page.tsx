@@ -40,6 +40,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getJobById } from '@/lib/mock-data';
+import { fetchJobById, submitApplication } from '@/lib/db';
 import { Job } from '@/lib/types';
 import {
   Video, Mic, Upload, Play, Square, RotateCcw, Send,
@@ -146,12 +147,16 @@ export default function RecordingPage() {
 
   // ── Fetch job data on mount ──
   useEffect(() => {
-    const foundJob = getJobById(jobId);
-    if (foundJob) {
-      setJob(foundJob);
-    } else {
-      setNotFound(true);
-    }
+    fetchJobById(jobId).then(foundJob => {
+      if (foundJob) {
+        setJob(foundJob);
+      } else {
+        const local = getJobById(jobId);
+        if (local) setJob(local);
+        else setNotFound(true);
+      }
+      setLoading(false);
+    });
 
     // Check browser support for MediaRecorder
     if (typeof window !== 'undefined') {
@@ -159,8 +164,6 @@ export default function RecordingPage() {
       const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
       setSupportsRecording(hasMediaRecorder && hasGetUserMedia);
     }
-
-    setLoading(false);
   }, [jobId]);
 
   // ── Cleanup on unmount ──
@@ -365,26 +368,38 @@ export default function RecordingPage() {
   // In production: POST to /api/submit endpoint.
   // On success: navigate to confirmation page.
   // ─────────────────────────────────────────
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!mediaBlob) return;
     setPageState('uploading');
     setUploadProgress(0);
 
-    // Simulate upload progress
+    let generatedToken = '';
+    try {
+      const res = await submitApplication({
+        jobId,
+        jobTitle: job?.title || 'Applicant',
+        candidateName: 'Candidate User',
+        candidateEmail: 'candidate@example.com',
+        mode: recordMode,
+      });
+      generatedToken = res.token;
+    } catch {}
+
+    // Upload progress animation
     let progress = 0;
     const interval = setInterval(() => {
-      progress += Math.random() * 15 + 5;
+      progress += Math.random() * 20 + 10;
       if (progress >= 100) {
         progress = 100;
         clearInterval(interval);
-        // Simulate a short server processing delay
         setTimeout(() => {
-          router.push(`/apply/${jobId}/confirm`);
-        }, 600);
+          const query = generatedToken ? `?token=${generatedToken}` : '';
+          router.push(`/apply/${jobId}/confirm${query}`);
+        }, 500);
       }
       setUploadProgress(Math.min(progress, 100));
-    }, 300);
-  }, [mediaBlob, jobId, router]);
+    }, 250);
+  }, [mediaBlob, jobId, job, recordMode, router]);
 
   // ── Loading state ──
   if (loading) {

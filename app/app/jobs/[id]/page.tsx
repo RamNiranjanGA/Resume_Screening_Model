@@ -28,6 +28,7 @@ import { notFound } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getJobById, MOCK_JOBS } from '@/lib/mock-data';
+import { fetchJobById } from '@/lib/db';
 import { JobType } from '@/lib/types';
 import {
   MapPin, Briefcase, Users, Clock, ArrowRight,
@@ -41,7 +42,7 @@ export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<Metadata> {
   const { id } = await params;
-  const job = getJobById(id);
+  const job = (await fetchJobById(id)) ?? getJobById(id);
   if (!job) return { title: 'Job Not Found — LuminaryHire' };
   return {
     title: `${job.title} at ${job.company} — LuminaryHire`,
@@ -127,7 +128,7 @@ export default async function JobDetailPage(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const job = getJobById(id);
+  const job = (await fetchJobById(id)) ?? getJobById(id);
 
   // ── State 3: Job not found ──
   // We render our own friendly page rather than calling notFound()

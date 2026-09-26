@@ -84,6 +84,7 @@ import {
   Building2, ChevronDown, Eye, Zap
 } from 'lucide-react';
 import { JobType } from '@/lib/types';
+import { createJob } from '@/lib/db';
 
 // ─────────────────────────────────────────────
 // Types
@@ -630,17 +631,29 @@ export default function PostJobPage() {
   const requirementsErrors = [errors.responsibilities, errors.requirements, errors.mustHaveSkills].filter(Boolean).length;
 
   // ── Save as draft ──
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     setStatus('saving_draft');
-    setTimeout(() => {
-      setStatus('saved_draft');
-      setDraftSavedAt(new Date().toLocaleTimeString());
-      setTimeout(() => setStatus('dirty'), 3000);
-    }, 900);
+    await createJob({
+      title: form.title || 'Untitled Draft',
+      company: form.company || 'Luminary Labs',
+      department: form.department || 'General',
+      location: form.location || 'Bengaluru, Karnataka',
+      type: (form.type as JobType) || 'hybrid',
+      salary: form.salary,
+      summary: form.summary || '',
+      description: form.description || '',
+      responsibilities: form.responsibilities,
+      requirements: form.requirements,
+      mustHaveSkills: form.mustHaveSkills,
+      status: 'draft',
+    });
+    setStatus('saved_draft');
+    setDraftSavedAt(new Date().toLocaleTimeString());
+    setTimeout(() => setStatus('dirty'), 3000);
   };
 
   // ── Publish ──
-  const handlePublish = (e: FormEvent) => {
+  const handlePublish = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) {
       setStatus('validation_error');
@@ -659,7 +672,21 @@ export default function PostJobPage() {
     }
 
     setStatus('publishing');
-    setTimeout(() => setStatus('published'), 1200);
+    await createJob({
+      title: form.title,
+      company: form.company,
+      department: form.department,
+      location: form.location,
+      type: form.type as JobType,
+      salary: form.salary,
+      summary: form.summary,
+      description: form.description,
+      responsibilities: form.responsibilities,
+      requirements: form.requirements,
+      mustHaveSkills: form.mustHaveSkills,
+      status: 'published',
+    });
+    setStatus('published');
   };
 
   const totalErrors = Object.values(errors).filter(Boolean).length;

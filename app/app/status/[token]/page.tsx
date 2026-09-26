@@ -37,7 +37,8 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { MOCK_CANDIDATES } from '@/lib/mock-data';
-import { ApplicationStatus } from '@/lib/types';
+import { fetchApplicationByToken } from '@/lib/db';
+import { ApplicationStatus, Candidate } from '@/lib/types';
 import {
   CheckCircle2, Clock, Brain, Mail, ArrowRight,
   AlertTriangle, ExternalLink, Inbox, Loader,
@@ -206,21 +207,30 @@ export default function StatusPage() {
 
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
-
-  // Look up candidate by token
-  const candidateId = TOKEN_MAP[token];
-  const candidate = candidateId
-    ? MOCK_CANDIDATES.find(c => c.id === candidateId)
-    : null;
+  const [candidate, setCandidate] = useState<Candidate | null>(() => {
+    const candidateId = TOKEN_MAP[token];
+    return candidateId ? MOCK_CANDIDATES.find(c => c.id === candidateId) || null : null;
+  });
 
   useEffect(() => {
-    // Simulate async lookup
-    const timer = setTimeout(() => {
-      if (!candidate) setExpired(true);
+    fetchApplicationByToken(token).then(res => {
+      if (res && res.candidate) {
+        setCandidate(res.candidate);
+        setLoading(false);
+      } else {
+        const candidateId = TOKEN_MAP[token];
+        const cand = candidateId ? MOCK_CANDIDATES.find(c => c.id === candidateId) || null : null;
+        if (cand) {
+          setCandidate(cand);
+        } else {
+          setExpired(true);
+        }
+        setLoading(false);
+      }
+    }).catch(() => {
       setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [candidate]);
+    });
+  }, [token]);
 
   // ── Loading ──
   if (loading) {
