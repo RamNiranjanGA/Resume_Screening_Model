@@ -75,12 +75,14 @@ ALTER TABLE public.candidates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read of published jobs
+DROP POLICY IF EXISTS "Allow public read of published jobs" ON public.jobs;
 CREATE POLICY "Allow public read of published jobs"
   ON public.jobs
   FOR SELECT
   USING (status = 'published');
 
 -- Allow all operations for jobs during development/admin use
+DROP POLICY IF EXISTS "Allow all jobs operations" ON public.jobs;
 CREATE POLICY "Allow all jobs operations"
   ON public.jobs
   FOR ALL
@@ -88,6 +90,7 @@ CREATE POLICY "Allow all jobs operations"
   WITH CHECK (true);
 
 -- Allow public read & write of candidates for screening workflows
+DROP POLICY IF EXISTS "Allow all candidate operations" ON public.candidates;
 CREATE POLICY "Allow all candidate operations"
   ON public.candidates
   FOR ALL
@@ -95,6 +98,7 @@ CREATE POLICY "Allow all candidate operations"
   WITH CHECK (true);
 
 -- Allow public read & write of applications for token status checks
+DROP POLICY IF EXISTS "Allow all application operations" ON public.applications;
 CREATE POLICY "Allow all application operations"
   ON public.applications
   FOR ALL
