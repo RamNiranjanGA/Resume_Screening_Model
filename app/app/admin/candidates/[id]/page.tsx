@@ -61,8 +61,9 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Clock,
   Loader, Eye, Sparkles, ArrowRight, X,
   Send, Edit3, Info, AlertCircle, Play,
-  Volume2, Mic
+  Volume2, Mic, RefreshCw, ExternalLink
 } from 'lucide-react';
+import { getSignedRecordingUrl, isSignedUrl, isStoragePath } from '@/lib/storage';
 
 // ─────────────────────────────────────────────
 // SCORE RING — circular SVG progress indicator
@@ -317,6 +318,43 @@ export default function CandidateDetailPage() {
     overriddenAt: string;
   } | null>(candidate?.manualOverride ?? null);
   const [overrideSuccess, setOverrideSuccess] = useState(false);
+
+  // Recording playback URL (may need refresh if signed URL expires)
+  const [recordingPlayUrl, setRecordingPlayUrl] = useState<string>(
+    candidate?.recordingUrl || ''
+  );
+  const [urlRefreshing, setUrlRefreshing] = useState(false);
+
+  // Detect if the recording is video or audio based on URL/path
+  const isVideoRecording = !recordingPlayUrl.includes('.mp3') &&
+    !recordingPlayUrl.includes('.wav') &&
+    !recordingPlayUrl.includes('.ogg') &&
+    !recordingPlayUrl.includes('.m4a');
+
+  // Refresh signed URL when it may have expired
+  const handleRefreshUrl = async () => {
+    if (!candidate?.recordingUrl) return;
+    setUrlRefreshing(true);
+    try {
+      const rawUrl = candidate.recordingUrl;
+      // If it's a storage path (not a full URL), generate a signed URL
+      const pathToSign = isStoragePath(rawUrl)
+        ? rawUrl
+        : rawUrl.split('/object/sign/recordings/')[1]?.split('?')[0];
+      if (pathToSign) {
+        const fresh = await getSignedRecordingUrl(pathToSign);
+        if (fresh) setRecordingPlayUrl(fresh);
+      }
+    } catch {}
+    setUrlRefreshing(false);
+  };
+
+  // Sync playback URL when candidate loads from DB
+  useEffect(() => {
+    if (candidate?.recordingUrl) {
+      setRecordingPlayUrl(candidate.recordingUrl);
+    }
+  }, [candidate?.recordingUrl]);
 
   // Effective decision (override takes precedence)
   const effectiveDecision = localOverride?.decision ?? candidate?.decision ?? 'pending';
@@ -598,36 +636,73 @@ export default function CandidateDetailPage() {
 
             {/* ── RECORDING CARD ── */}
             <div className="glass-card-static" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
-              <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1rem' }}>
-                Recording
-              </h3>
-              <div style={{
-                padding: '2rem 1.5rem',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 12,
-                textAlign: 'center',
-              }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(79,70,229,0.15))',
-                  border: '2px solid rgba(124,58,237,0.3)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 1rem',
-                }}>
-                  <Play size={24} style={{ color: '#A78BFA', marginLeft: 3 }} />
-                </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  Video / Audio Recording
-                </p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Recording playback requires media storage integration (AWS S3 / Cloudinary). This is a placeholder for the demo.
-                </p>
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.85rem' }}>
-                  <span className="badge badge-purple" style={{ fontSize: '0.7rem' }}><Video size={10} /> Video</span>
-                  <span className="badge badge-cyan" style={{ fontSize: '0.7rem' }}><Mic size={10} /> Audio</span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Recording
+                </h3>
+                {recordingPlayUrl && (
+                  <button
+                    onClick={handleRefreshUrl}
+                    disabled={urlRefreshing}
+                    title="Refresh signed URL"
+                    style={{ background: 'none', border: 'none', cursor: urlRefreshing ? 'wait' : 'pointer', color: 'var(--text-muted)', padding: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem' }}
+                  >
+                    {urlRefreshing
+                      ? <Loader size={12} style={{ animation: 'admin-spin 1s linear infinite' }} />
+                      : <RefreshCw size={12} />}
+                    {urlRefreshing ? 'Refreshing…' : 'Refresh URL'}
+                  </button>
+                )}
               </div>
+
+              {recordingPlayUrl ? (
+                <div>
+                  {isVideoRecording ? (
+                    <video
+                      src={recordingPlayUrl}
+                      controls
+                      preload="metadata"
+                      style={{
+                        width: '100%', borderRadius: 10,
+                        background: '#000',
+                        maxHeight: 260,
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    />
+                  ) : (
+                    <div style={{ padding: '1.25rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                        <Mic size={14} style={{ color: '#67E8F9' }} />
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Audio Recording</span>
+                      </div>
+                      <audio
+                        src={recordingPlayUrl}
+                        controls
+                        preload="metadata"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  )}
+                  <a
+                    href={recordingPlayUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.75rem', fontSize: '0.75rem', color: '#A78BFA', textDecoration: 'none' }}
+                  >
+                    <ExternalLink size={11} /> Open in new tab
+                  </a>
+                </div>
+              ) : (
+                <div style={{ padding: '2rem 1.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 12, textAlign: 'center' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                    <Play size={20} style={{ color: '#A78BFA', marginLeft: 2 }} />
+                  </div>
+                  <p style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>No Recording Available</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                    The recording URL will appear here once the candidate submits their application.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* ── OVERRIDE / AUDIT CARD ── */}

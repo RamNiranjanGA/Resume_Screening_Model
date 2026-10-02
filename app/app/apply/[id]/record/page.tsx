@@ -41,6 +41,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getJobById } from '@/lib/mock-data';
 import { fetchJobById, submitApplication } from '@/lib/db';
+import { uploadRecording } from '@/lib/storage';
 import { Job } from '@/lib/types';
 import {
   Video, Mic, Upload, Play, Square, RotateCcw, Send,
@@ -364,15 +365,39 @@ export default function RecordingPage() {
 
   // ─────────────────────────────────────────
   // SUBMIT RECORDING
-  // Simulates upload with progress bar.
-  // In production: POST to /api/submit endpoint.
-  // On success: navigate to confirmation page.
+  // 1. Upload blob to Supabase Storage (with live progress).
+  // 2. Save candidate record to DB with the returned signed URL.
+  // 3. Navigate to confirmation page.
+  // Falls back gracefully if storage is unavailable.
   // ─────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!mediaBlob) return;
     setPageState('uploading');
     setUploadProgress(0);
+    setErrorMessage('');
 
+    // Generate a candidate ID upfront so storage path & DB row match
+    const candidateId = `cand-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 5)}`;
+
+    // ── Step 1: Upload blob to Supabase Storage ──
+    let recordingUrl = '';
+    const uploadResult = await uploadRecording(
+      mediaBlob,
+      candidateId,
+      jobId,
+      (pct) => setUploadProgress(Math.min(pct, 90)), // reserve last 10% for DB write
+    );
+
+    if (uploadResult?.signedUrl) {
+      recordingUrl = uploadResult.signedUrl;
+    } else if (uploadResult?.path) {
+      // Upload succeeded but signed URL generation failed — store the path
+      recordingUrl = uploadResult.path;
+    }
+    // If uploadResult is null: Storage unavailable, continue anyway (resilient)
+
+    // ── Step 2: Save application record to DB ──
+    setUploadProgress(92);
     let generatedToken = '';
     try {
       const res = await submitApplication({
@@ -380,25 +405,22 @@ export default function RecordingPage() {
         jobTitle: job?.title || 'Applicant',
         candidateName: 'Candidate User',
         candidateEmail: 'candidate@example.com',
+        recordingUrl,
         mode: recordMode,
+        candidateId,
       });
       generatedToken = res.token;
-    } catch {}
+    } catch (err) {
+      console.warn('submitApplication failed:', err);
+      // Continue — upload already happened; don't block the user
+    }
 
-    // Upload progress animation
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 20 + 10;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setTimeout(() => {
-          const query = generatedToken ? `?token=${generatedToken}` : '';
-          router.push(`/apply/${jobId}/confirm${query}`);
-        }, 500);
-      }
-      setUploadProgress(Math.min(progress, 100));
-    }, 250);
+    // ── Step 3: Navigate to confirmation ──
+    setUploadProgress(100);
+    setTimeout(() => {
+      const query = generatedToken ? `?token=${generatedToken}` : '';
+      router.push(`/apply/${jobId}/confirm${query}`);
+    }, 500);
   }, [mediaBlob, jobId, job, recordMode, router]);
 
   // ── Loading state ──
