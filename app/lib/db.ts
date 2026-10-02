@@ -237,7 +237,7 @@ export async function submitApplication(data: {
         ai_score: 0,
         ai_reasoning: '',
         transcript: '',
-        recording_url: data.recordingUrl || `/recordings/${candidateId}.webm`,
+        recording_url: data.recordingUrl || '',
         submitted_at: now,
       },
     ]);
@@ -262,6 +262,24 @@ export async function submitApplication(data: {
         await supabase.from('jobs').update({ applicant_count: (jobRow.applicant_count || 0) + 1 }).eq('id', data.jobId);
       }
     } catch {}
+
+    // ── Fire-and-forget AI scoring pipeline ──
+    // Called AFTER DB rows are written so it never blocks the candidate's redirect.
+    // The route handler updates: received → processing → decided.
+    const baseUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
+    fetch(`${baseUrl}/api/score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidateId,
+        jobId: data.jobId,
+        candidateName: data.candidateName,
+      }),
+    }).catch(err => console.warn('AI scoring trigger failed (non-critical):', err));
+
   } catch (err) {
     console.warn('Error saving application to Supabase, continuing with token:', err);
   }
