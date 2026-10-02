@@ -308,6 +308,8 @@ export async function submitApplication(data: {
         candidateId,
         jobId: data.jobId,
         candidateName: data.candidateName,
+        candidateEmail: data.candidateEmail,
+        recordingUrl: data.recordingUrl || '',
       }),
     }).catch(err => console.warn('AI scoring trigger failed (non-critical):', err));
 
