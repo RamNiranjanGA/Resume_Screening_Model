@@ -48,7 +48,8 @@ import {
   ChevronLeft, AlertTriangle, CheckCircle2, XCircle,
   Clock, FileVideo, FileAudio, HardDrive, Timer,
   Camera, MicOff, VideoOff, Pause, ArrowRight,
-  Shield, Info, RefreshCw, X, File, AlertCircle
+  Shield, Info, RefreshCw, X, File, AlertCircle,
+  User, Mail, Phone, Briefcase
 } from 'lucide-react';
 
 // ── Constants ──
@@ -106,6 +107,185 @@ function UnsupportedBanner() {
 }
 
 // ─────────────────────────────────────────────
+// CANDIDATE DETAILS FORM
+// Collects candidate name, email, and contact info
+// so recruiters can identify applicants without watching video
+// ─────────────────────────────────────────────
+function CandidateDetailsForm({
+  name,
+  setName,
+  email,
+  setEmail,
+  phone,
+  setPhone,
+  headline,
+  setHeadline,
+  errors,
+  clearError,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  email: string;
+  setEmail: (v: string) => void;
+  phone: string;
+  setPhone: (v: string) => void;
+  headline: string;
+  setHeadline: (v: string) => void;
+  errors: { name?: string; email?: string };
+  clearError: (field: 'name' | 'email') => void;
+}) {
+  return (
+    <div className="glass-card-static" style={{ padding: '1.5rem 1.75rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem' }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A78BFA'
+        }}>
+          <User size={18} />
+        </div>
+        <div>
+          <h2 style={{ fontSize: '0.98rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            Candidate Information
+          </h2>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.15rem 0 0' }}>
+            Recruiters will see your name and email directly in their applicant list.
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+        {/* Full Name */}
+        <div>
+          <label htmlFor="cand-name" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+            Full Name <span style={{ color: '#EF4444' }}>*</span>
+          </label>
+          <div style={{ position: 'relative' }}>
+            <User size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              id="cand-name"
+              type="text"
+              placeholder="e.g. Priya Sharma"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (errors.name) clearError('name');
+              }}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem 0.65rem 2.25rem',
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${errors.name ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 8,
+                color: 'var(--text-primary)',
+                fontSize: '0.88rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+          {errors.name && (
+            <span style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: 4, display: 'block' }}>
+              {errors.name}
+            </span>
+          )}
+        </div>
+
+        {/* Email */}
+        <div>
+          <label htmlFor="cand-email" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+            Email Address <span style={{ color: '#EF4444' }}>*</span>
+          </label>
+          <div style={{ position: 'relative' }}>
+            <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              id="cand-email"
+              type="email"
+              placeholder="e.g. priya.sharma@example.com"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errors.email) clearError('email');
+              }}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem 0.65rem 2.25rem',
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${errors.email ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 8,
+                color: 'var(--text-primary)',
+                fontSize: '0.88rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+          {errors.email && (
+            <span style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: 4, display: 'block' }}>
+              {errors.email}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginTop: '0.85rem' }}>
+        {/* Phone */}
+        <div>
+          <label htmlFor="cand-phone" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+            Phone Number <span style={{ fontSize: '0.72rem', opacity: 0.7 }}>(Optional)</span>
+          </label>
+          <div style={{ position: 'relative' }}>
+            <Phone size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              id="cand-phone"
+              type="tel"
+              placeholder="e.g. +91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem 0.65rem 2.25rem',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8,
+                color: 'var(--text-primary)',
+                fontSize: '0.88rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Headline */}
+        <div>
+          <label htmlFor="cand-headline" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+            Headline / Role Note <span style={{ fontSize: '0.72rem', opacity: 0.7 }}>(Optional)</span>
+          </label>
+          <div style={{ position: 'relative' }}>
+            <Briefcase size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              id="cand-headline"
+              type="text"
+              placeholder="e.g. Frontend Engineer · 3 yrs exp"
+              value={headline}
+              onChange={(e) => setHeadline(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.65rem 0.85rem 0.65rem 2.25rem',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8,
+                color: 'var(--text-primary)',
+                fontSize: '0.88rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // MAIN PAGE COMPONENT
 // ─────────────────────────────────────────────
 export default function RecordingPage() {
@@ -120,6 +300,13 @@ export default function RecordingPage() {
   const [pageState, setPageState] = useState<PageState>('idle');
   const [recordMode, setRecordMode] = useState<RecordMode>('video');
   const [supportsRecording, setSupportsRecording] = useState(true);
+
+  // ── Candidate info state ──
+  const [candidateName, setCandidateName] = useState('');
+  const [candidateEmail, setCandidateEmail] = useState('');
+  const [candidatePhone, setCandidatePhone] = useState('');
+  const [candidateHeadline, setCandidateHeadline] = useState('');
+  const [formValidationErrors, setFormValidationErrors] = useState<{ name?: string; email?: string }>({});
 
   // ── Recording state ──
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -164,6 +351,18 @@ export default function RecordingPage() {
       const hasMediaRecorder = typeof MediaRecorder !== 'undefined';
       const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
       setSupportsRecording(hasMediaRecorder && hasGetUserMedia);
+
+      // Load saved candidate contact info
+      try {
+        const savedName = localStorage.getItem('candidate_name');
+        const savedEmail = localStorage.getItem('candidate_email');
+        const savedPhone = localStorage.getItem('candidate_phone');
+        const savedHeadline = localStorage.getItem('candidate_headline');
+        if (savedName) setCandidateName(savedName);
+        if (savedEmail) setCandidateEmail(savedEmail);
+        if (savedPhone) setCandidatePhone(savedPhone);
+        if (savedHeadline) setCandidateHeadline(savedHeadline);
+      } catch {}
     }
   }, [jobId]);
 
@@ -365,13 +564,46 @@ export default function RecordingPage() {
 
   // ─────────────────────────────────────────
   // SUBMIT RECORDING
-  // 1. Upload blob to Supabase Storage (with live progress).
-  // 2. Save candidate record to DB with the returned signed URL.
-  // 3. Navigate to confirmation page.
+  // 1. Validate candidate name and email
+  // 2. Upload blob to Supabase Storage (with live progress).
+  // 3. Save candidate record to DB with the returned signed URL.
+  // 4. Navigate to confirmation page with candidate details.
   // Falls back gracefully if storage is unavailable.
   // ─────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!mediaBlob) return;
+
+    // Validate applicant details
+    const trimmedName = candidateName.trim();
+    const trimmedEmail = candidateEmail.trim();
+    const errors: { name?: string; email?: string } = {};
+
+    if (!trimmedName) {
+      errors.name = 'Full name is required';
+    } else if (trimmedName.length < 2) {
+      errors.name = 'Name must be at least 2 characters';
+    }
+
+    if (!trimmedEmail) {
+      errors.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormValidationErrors(errors);
+      setErrorMessage('Please provide your name and a valid email address before submitting.');
+      return;
+    }
+
+    // Save preferences locally
+    try {
+      localStorage.setItem('candidate_name', trimmedName);
+      localStorage.setItem('candidate_email', trimmedEmail);
+      if (candidatePhone) localStorage.setItem('candidate_phone', candidatePhone.trim());
+      if (candidateHeadline) localStorage.setItem('candidate_headline', candidateHeadline.trim());
+    } catch {}
+
     setPageState('uploading');
     setUploadProgress(0);
     setErrorMessage('');
@@ -403,8 +635,8 @@ export default function RecordingPage() {
       const res = await submitApplication({
         jobId,
         jobTitle: job?.title || 'Applicant',
-        candidateName: 'Candidate User',
-        candidateEmail: 'candidate@example.com',
+        candidateName: trimmedName,
+        candidateEmail: trimmedEmail,
         recordingUrl,
         mode: recordMode,
         candidateId,
@@ -418,10 +650,13 @@ export default function RecordingPage() {
     // ── Step 3: Navigate to confirmation ──
     setUploadProgress(100);
     setTimeout(() => {
-      const query = generatedToken ? `?token=${generatedToken}` : '';
-      router.push(`/apply/${jobId}/confirm${query}`);
+      const queryParams = new URLSearchParams();
+      if (generatedToken) queryParams.set('token', generatedToken);
+      queryParams.set('name', trimmedName);
+      queryParams.set('email', trimmedEmail);
+      router.push(`/apply/${jobId}/confirm?${queryParams.toString()}`);
     }, 500);
-  }, [mediaBlob, jobId, job, recordMode, router]);
+  }, [mediaBlob, jobId, job, recordMode, candidateName, candidateEmail, candidatePhone, candidateHeadline, router]);
 
   // ── Loading state ──
   if (loading) {
@@ -542,6 +777,20 @@ export default function RecordingPage() {
                   ═══════════════════════════════════════ */}
               {pageState === 'idle' && (
                 <>
+                  {/* Candidate contact information form */}
+                  <CandidateDetailsForm
+                    name={candidateName}
+                    setName={setCandidateName}
+                    email={candidateEmail}
+                    setEmail={setCandidateEmail}
+                    phone={candidatePhone}
+                    setPhone={setCandidatePhone}
+                    headline={candidateHeadline}
+                    setHeadline={setCandidateHeadline}
+                    errors={formValidationErrors}
+                    clearError={(field) => setFormValidationErrors(prev => ({ ...prev, [field]: undefined }))}
+                  />
+
                   {/* Record options */}
                   {supportsRecording && (
                     <div className="glass-card-static" style={{ padding: '2rem' }}>
@@ -960,6 +1209,27 @@ export default function RecordingPage() {
                       </span>
                     ))}
                   </div>
+
+                  {/* Candidate contact information form (review before submitting) */}
+                  <CandidateDetailsForm
+                    name={candidateName}
+                    setName={setCandidateName}
+                    email={candidateEmail}
+                    setEmail={setCandidateEmail}
+                    phone={candidatePhone}
+                    setPhone={setCandidatePhone}
+                    headline={candidateHeadline}
+                    setHeadline={setCandidateHeadline}
+                    errors={formValidationErrors}
+                    clearError={(field) => setFormValidationErrors(prev => ({ ...prev, [field]: undefined }))}
+                  />
+
+                  {errorMessage && (
+                    <div className="alert-warning" style={{ marginBottom: '1.25rem' }}>
+                      <AlertCircle size={16} />
+                      <span style={{ fontSize: '0.85rem' }}>{errorMessage}</span>
+                    </div>
+                  )}
 
                   {/* Action buttons */}
                   <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>

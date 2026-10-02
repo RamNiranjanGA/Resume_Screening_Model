@@ -63,13 +63,15 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { MOCK_CANDIDATES, MOCK_JOBS, getRelativeTime } from '@/lib/mock-data';
-import { fetchCandidates } from '@/lib/db';
+import { fetchCandidates, updateCandidateDecision } from '@/lib/db';
 import { Candidate, DecisionType, ApplicationStatus } from '@/lib/types';
 import {
   Users, CheckCircle2, XCircle, AlertTriangle, Clock,
   Search, Filter, ArrowUpDown, ChevronRight, Loader,
   Eye, Sparkles, ShieldCheck, BarChart3, UserCheck,
-  UserX, UserCog, Inbox, X, ArrowRight
+  UserX, UserCog, Inbox, X, ArrowRight,
+  Mail, Phone, FileText, LayoutGrid, List, Copy, Check,
+  User, Briefcase, Calendar, ChevronDown
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────
@@ -252,16 +254,604 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 ];
 
 // ─────────────────────────────────────────────
+// CANDIDATE FORM CARD — Form-like structure for recruiters
+// Displays candidate name, email, and screening details
+// without requiring video playback
+// ─────────────────────────────────────────────
+function CandidateFormCard({
+  candidate,
+  onQuickView,
+  onQuickDecision,
+  isUpdating,
+}: {
+  candidate: Candidate;
+  onQuickView: (c: Candidate) => void;
+  onQuickDecision: (id: string, decision: DecisionType) => void;
+  isUpdating: boolean;
+}) {
+  const getAvatarColor = (name: string) => {
+    const colors = ['#7C3AED', '#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EC4899', '#6366F1'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const getInitials = (name: string) => {
+    const parts = name.split(' ');
+    return parts.length >= 2 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2);
+  };
+
+  return (
+    <div
+      className="glass-card-static"
+      style={{
+        padding: '1.5rem',
+        borderRadius: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1.15rem',
+        position: 'relative',
+        transition: 'all 0.2s ease',
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.02)',
+      }}
+    >
+      {/* ── CARD HEADER: Avatar, Name, Email, Status & Decision Badges ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%',
+            background: getAvatarColor(candidate.name),
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: '0.9rem', fontWeight: 800, flexShrink: 0,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}>
+            {getInitials(candidate.name)}
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
+              {candidate.name}
+            </h3>
+            <a
+              href={`mailto:${candidate.email}`}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                fontSize: '0.78rem', color: '#A78BFA', textDecoration: 'none',
+                marginTop: '0.2rem',
+              }}
+              title="Click to email candidate"
+            >
+              <Mail size={12} /> {candidate.email}
+            </a>
+          </div>
+        </div>
+
+        {/* Badges */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <StatusBadge status={candidate.status} />
+          <DecisionBadge decision={candidate.decision} hasOverride={!!candidate.manualOverride} />
+        </div>
+      </div>
+
+      {/* ── FORM-LIKE DATA GRID ── */}
+      <div style={{
+        background: 'rgba(0,0,0,0.25)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: 12,
+        padding: '0.9rem 1.15rem',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+        gap: '0.85rem 1.15rem',
+      }}>
+        {/* Field: Full Name */}
+        <div>
+          <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>
+            Candidate Name
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            {candidate.name}
+          </span>
+        </div>
+
+        {/* Field: Email */}
+        <div>
+          <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>
+            Email Address
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
+            {candidate.email}
+          </span>
+        </div>
+
+        {/* Field: Applied Role */}
+        <div>
+          <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>
+            Applied Position
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#67E8F9' }}>
+            {candidate.jobTitle}
+          </span>
+        </div>
+
+        {/* Field: Submitted Date */}
+        <div>
+          <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>
+            Submission Date
+          </span>
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            {getRelativeTime(candidate.submittedAt)}
+          </span>
+        </div>
+
+        {/* Field: AI Match Score */}
+        <div style={{ gridColumn: 'span 2' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              AI Fit Assessment
+            </span>
+            <span style={{
+              fontSize: '0.75rem', fontWeight: 700,
+              color: candidate.aiScore >= 80 ? '#10B981' : candidate.aiScore >= 60 ? '#FBBF24' : '#EF4444'
+            }}>
+              {candidate.aiScore > 0 ? `${candidate.aiScore}/100 Match` : 'Awaiting AI Analysis'}
+            </span>
+          </div>
+          <ScoreBar score={candidate.aiScore} status={candidate.status} />
+        </div>
+      </div>
+
+      {/* AI Summary / Reasoning notes (if available) */}
+      {candidate.aiReasoning && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: 'rgba(124,58,237,0.04)',
+          border: '1px solid rgba(124,58,237,0.12)',
+          borderRadius: 10,
+          fontSize: '0.78rem',
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem', color: '#A78BFA', fontWeight: 600, fontSize: '0.72rem' }}>
+            <Sparkles size={11} /> AI Evaluation Notes
+          </div>
+          <p style={{ margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {candidate.aiReasoning}
+          </p>
+        </div>
+      )}
+
+      {/* ── CARD ACTIONS: Quick Decision & Profile Form Modal ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '0.75rem', flexWrap: 'wrap', paddingTop: '0.75rem',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        {/* Quick Decision buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <button
+            onClick={() => onQuickDecision(candidate.id, 'selected')}
+            disabled={isUpdating}
+            title="Mark as Selected"
+            style={{
+              padding: '0.35rem 0.65rem',
+              borderRadius: 8,
+              border: candidate.decision === 'selected' ? '1px solid #10B981' : '1px solid rgba(16,185,129,0.2)',
+              background: candidate.decision === 'selected' ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.06)',
+              color: '#34D399',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+          >
+            <CheckCircle2 size={13} /> Select
+          </button>
+
+          <button
+            onClick={() => onQuickDecision(candidate.id, 'manual_review')}
+            disabled={isUpdating}
+            title="Flag for Human Review"
+            style={{
+              padding: '0.35rem 0.65rem',
+              borderRadius: 8,
+              border: candidate.decision === 'manual_review' ? '1px solid #F59E0B' : '1px solid rgba(245,158,11,0.2)',
+              background: candidate.decision === 'manual_review' ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.06)',
+              color: '#FCD34D',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+          >
+            <AlertTriangle size={13} /> Review
+          </button>
+
+          <button
+            onClick={() => onQuickDecision(candidate.id, 'not_selected')}
+            disabled={isUpdating}
+            title="Pass on Candidate"
+            style={{
+              padding: '0.35rem 0.65rem',
+              borderRadius: 8,
+              border: candidate.decision === 'not_selected' ? '1px solid #EF4444' : '1px solid rgba(239,68,68,0.2)',
+              background: candidate.decision === 'not_selected' ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.06)',
+              color: '#FCA5A5',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+          >
+            <XCircle size={13} /> Pass
+          </button>
+        </div>
+
+        {/* View Form Modal or Full Dossier */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            onClick={() => onQuickView(candidate)}
+            className="btn-secondary"
+            style={{
+              padding: '0.4rem 0.75rem',
+              fontSize: '0.76rem',
+              borderRadius: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            <FileText size={13} /> View Form
+          </button>
+
+          <Link
+            href={`/admin/candidates/${candidate.id}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              padding: '0.4rem 0.75rem',
+              background: 'rgba(124,58,237,0.12)',
+              border: '1px solid rgba(124,58,237,0.25)',
+              borderRadius: 8,
+              color: '#A78BFA',
+              fontSize: '0.76rem',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            <Eye size={13} /> Details
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// QUICK VIEW FORM MODAL
+// Detailed candidate profile sheet showing all details
+// without requiring recruiter to watch any video
+// ─────────────────────────────────────────────
+function QuickViewFormModal({
+  candidate,
+  onClose,
+  onQuickDecision,
+  isUpdating,
+}: {
+  candidate: Candidate;
+  onClose: () => void;
+  onQuickDecision: (id: string, decision: DecisionType) => void;
+  isUpdating: boolean;
+}) {
+  const [copiedEmail, setCopiedEmail] = useState(false);
+
+  const copyEmail = () => {
+    navigator.clipboard.writeText(candidate.email);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2000);
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.78)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.5rem',
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-card-static"
+        style={{
+          width: '100%',
+          maxWidth: 620,
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          padding: '2rem',
+          borderRadius: 20,
+          border: '1px solid rgba(124,58,237,0.3)',
+          background: 'var(--bg-card)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7C3AED, #4F46E5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: '1.1rem', fontWeight: 800,
+            }}>
+              {candidate.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#A78BFA', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Applicant Form Dossier
+                </span>
+                <StatusBadge status={candidate.status} />
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                {candidate.name}
+              </h2>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: 'none', borderRadius: '50%',
+              width: 32, height: 32,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--text-muted)', cursor: 'pointer',
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Structured Form Dossier Fields */}
+        <div style={{
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 14,
+          padding: '1.25rem',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '1rem',
+          marginBottom: '1.5rem',
+        }}>
+          <div>
+            <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>
+              Full Name
+            </span>
+            <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {candidate.name}
+            </p>
+          </div>
+
+          <div>
+            <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>
+              Email Address
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <a href={`mailto:${candidate.email}`} style={{ fontSize: '0.9rem', color: '#67E8F9', textDecoration: 'none' }}>
+                {candidate.email}
+              </a>
+              <button
+                onClick={copyEmail}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: copiedEmail ? '#10B981' : 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center',
+                }}
+                title="Copy email address"
+              >
+                {copiedEmail ? <Check size={13} /> : <Copy size={13} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>
+              Target Job
+            </span>
+            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+              {candidate.jobTitle}
+            </p>
+          </div>
+
+          <div>
+            <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>
+              Submitted Timestamp
+            </span>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              {new Date(candidate.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+
+        {/* AI Match Evaluation */}
+        <div style={{
+          background: 'rgba(124,58,237,0.06)',
+          border: '1px solid rgba(124,58,237,0.18)',
+          borderRadius: 14,
+          padding: '1.25rem',
+          marginBottom: '1.5rem',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sparkles size={16} color="#A78BFA" />
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#A78BFA' }}>
+                AI Match Evaluation
+              </span>
+            </div>
+            <span style={{
+              fontSize: '1rem', fontWeight: 800,
+              color: candidate.aiScore >= 80 ? '#10B981' : candidate.aiScore >= 60 ? '#FBBF24' : '#EF4444'
+            }}>
+              {candidate.aiScore > 0 ? `${candidate.aiScore} / 100` : 'Pending'}
+            </span>
+          </div>
+
+          {candidate.aiReasoning ? (
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              {candidate.aiReasoning}
+            </p>
+          ) : (
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>
+              AI analysis queued — results will update automatically.
+            </p>
+          )}
+
+          {candidate.transcript && (
+            <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(124,58,237,0.15)' }}>
+              <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
+                Candidate Intro Transcript
+              </span>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0, fontStyle: 'italic' }}>
+                &ldquo;{candidate.transcript}&rdquo;
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Recruiter Quick Decision Actions */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.65rem' }}>
+            Set Recruiter Decision
+          </span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+            <button
+              onClick={() => onQuickDecision(candidate.id, 'selected')}
+              disabled={isUpdating}
+              style={{
+                padding: '0.75rem 0.5rem',
+                borderRadius: 10,
+                border: candidate.decision === 'selected' ? '2px solid #10B981' : '1px solid rgba(16,185,129,0.25)',
+                background: candidate.decision === 'selected' ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.06)',
+                color: '#34D399',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem',
+              }}
+            >
+              <CheckCircle2 size={18} />
+              <span>Select</span>
+            </button>
+
+            <button
+              onClick={() => onQuickDecision(candidate.id, 'manual_review')}
+              disabled={isUpdating}
+              style={{
+                padding: '0.75rem 0.5rem',
+                borderRadius: 10,
+                border: candidate.decision === 'manual_review' ? '2px solid #F59E0B' : '1px solid rgba(245,158,11,0.25)',
+                background: candidate.decision === 'manual_review' ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.06)',
+                color: '#FCD34D',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem',
+              }}
+            >
+              <AlertTriangle size={18} />
+              <span>Manual Review</span>
+            </button>
+
+            <button
+              onClick={() => onQuickDecision(candidate.id, 'not_selected')}
+              disabled={isUpdating}
+              style={{
+                padding: '0.75rem 0.5rem',
+                borderRadius: 10,
+                border: candidate.decision === 'not_selected' ? '2px solid #EF4444' : '1px solid rgba(239,68,68,0.25)',
+                background: candidate.decision === 'not_selected' ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.06)',
+                color: '#FCA5A5',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem',
+              }}
+            >
+              <XCircle size={18} />
+              <span>Pass</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom toolbar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <a
+            href={`mailto:${candidate.email}?subject=Application for ${encodeURIComponent(candidate.jobTitle)} at LuminaryHire`}
+            className="btn-secondary"
+            style={{ padding: '0.6rem 1rem', fontSize: '0.82rem' }}
+          >
+            <Mail size={14} /> Send Email
+          </a>
+
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button onClick={onClose} className="btn-ghost" style={{ padding: '0.6rem 1rem', fontSize: '0.82rem' }}>
+              Close
+            </button>
+            <Link
+              href={`/admin/candidates/${candidate.id}`}
+              className="btn-primary"
+              style={{ padding: '0.6rem 1.25rem', fontSize: '0.82rem' }}
+            >
+              <Eye size={14} /> Full Dossier
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────
 export default function CandidatesDashboard() {
   const [candidates, setCandidates] = useState<Candidate[]>(MOCK_CANDIDATES);
+  const [viewMode, setViewMode] = useState<'form' | 'table'>('form');
+  const [selectedCandidateForModal, setSelectedCandidateForModal] = useState<Candidate | null>(null);
+  const [decisionUpdatingId, setDecisionUpdatingId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCandidates().then(data => {
       if (data && data.length > 0) setCandidates(data);
     });
   }, []);
+
+  const handleQuickDecision = async (candidateId: string, decision: DecisionType) => {
+    setDecisionUpdatingId(candidateId);
+    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, decision } : c));
+    if (selectedCandidateForModal?.id === candidateId) {
+      setSelectedCandidateForModal(prev => prev ? { ...prev, decision } : null);
+    }
+    await updateCandidateDecision(candidateId, decision);
+    setDecisionUpdatingId(null);
+    setToastMessage(`Decision marked as ${decision.replace('_', ' ')}`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // ── Filters ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -521,17 +1111,86 @@ export default function CandidatesDashboard() {
             )}
           </div>
 
-          {/* ── Results count ── */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', padding: '0 0.25rem' }}>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          {/* ── Results count & View Mode Switcher ── */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '0 0.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
               Showing <strong style={{ color: 'var(--text-secondary)' }}>{filtered.length}</strong> of {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
+              {viewMode === 'form' ? ' · Form Cards View' : ' · Table View'}
             </p>
+
+            {/* View Mode Toggle */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 10,
+              padding: 3,
+              gap: 2,
+            }}>
+              <button
+                onClick={() => setViewMode('form')}
+                title="Form-like candidate listing"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.35rem',
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: 7,
+                  border: 'none',
+                  background: viewMode === 'form' ? 'rgba(124,58,237,0.25)' : 'transparent',
+                  color: viewMode === 'form' ? '#A78BFA' : 'var(--text-muted)',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <LayoutGrid size={13} />
+                <span>Form Cards</span>
+              </button>
+
+              <button
+                onClick={() => setViewMode('table')}
+                title="Compact data table"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.35rem',
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: 7,
+                  border: 'none',
+                  background: viewMode === 'table' ? 'rgba(124,58,237,0.25)' : 'transparent',
+                  color: viewMode === 'table' ? '#A78BFA' : 'var(--text-muted)',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <List size={13} />
+                <span>Table View</span>
+              </button>
+            </div>
           </div>
 
-          {/* ── TABLE ── */}
+          {/* ── CANDIDATE LISTINGS ── */}
           {filtered.length === 0 ? (
             <EmptyState hasFilters={hasFilters} onClear={clearFilters} />
+          ) : viewMode === 'form' ? (
+            /* Form Cards View (Form-like structure) */
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))',
+              gap: '1.25rem',
+            }}>
+              {filtered.map(c => (
+                <CandidateFormCard
+                  key={c.id}
+                  candidate={c}
+                  onQuickView={(cand) => setSelectedCandidateForModal(cand)}
+                  onQuickDecision={handleQuickDecision}
+                  isUpdating={decisionUpdatingId === c.id}
+                />
+              ))}
+            </div>
           ) : (
+            /* Compact Table View */
             <div className="glass-card-static" style={{ overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table" style={{ minWidth: 800 }}>
@@ -543,12 +1202,12 @@ export default function CandidatesDashboard() {
                       <th style={{ width: '10%' }}>Status</th>
                       <th style={{ width: '15%' }}>Decision</th>
                       <th style={{ width: '10%' }}>Submitted</th>
-                      <th style={{ width: '8%', textAlign: 'center' }}>Action</th>
+                      <th style={{ width: '12%', textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map(c => (
-                      <tr key={c.id} style={{ cursor: 'pointer' }}>
+                      <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedCandidateForModal(c)}>
                         {/* Candidate name + email */}
                         <td style={{ paddingLeft: '1.25rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -596,24 +1255,46 @@ export default function CandidatesDashboard() {
                           </span>
                         </td>
 
-                        {/* Action */}
+                        {/* Actions */}
                         <td style={{ textAlign: 'center' }}>
-                          <Link
-                            href={`/admin/candidates/${c.id}`}
-                            aria-label={`View details for ${c.name}`}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                              padding: '0.4rem 0.75rem',
-                              background: 'rgba(124,58,237,0.1)',
-                              border: '1px solid rgba(124,58,237,0.2)',
-                              borderRadius: 'var(--radius-full)',
-                              color: '#A78BFA', fontSize: '0.78rem', fontWeight: 600,
-                              textDecoration: 'none',
-                              transition: 'all 0.2s',
-                            }}
-                          >
-                            <Eye size={13} /> View
-                          </Link>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCandidateForModal(c);
+                              }}
+                              aria-label={`View form for ${c.name}`}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                padding: '0.35rem 0.65rem',
+                                background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                borderRadius: 'var(--radius-full)',
+                                color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <FileText size={12} /> Form
+                            </button>
+
+                            <Link
+                              href={`/admin/candidates/${c.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`View full dossier for ${c.name}`}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                padding: '0.35rem 0.65rem',
+                                background: 'rgba(124,58,237,0.1)',
+                                border: '1px solid rgba(124,58,237,0.2)',
+                                borderRadius: 'var(--radius-full)',
+                                color: '#A78BFA', fontSize: '0.75rem', fontWeight: 600,
+                                textDecoration: 'none',
+                                transition: 'all 0.2s',
+                              }}
+                            >
+                              <Eye size={12} /> Details
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -640,6 +1321,39 @@ export default function CandidatesDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── Quick View Form Modal ── */}
+      {selectedCandidateForModal && (
+        <QuickViewFormModal
+          candidate={selectedCandidateForModal}
+          onClose={() => setSelectedCandidateForModal(null)}
+          onQuickDecision={handleQuickDecision}
+          isUpdating={decisionUpdatingId === selectedCandidateForModal.id}
+        />
+      )}
+
+      {/* ── Toast Alert ── */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          background: 'rgba(16,185,129,0.95)',
+          color: '#fff',
+          padding: '0.75rem 1.25rem',
+          borderRadius: 10,
+          boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          zIndex: 1100,
+        }}>
+          <CheckCircle2 size={16} />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Spinner keyframe */}
       <style jsx global>{`

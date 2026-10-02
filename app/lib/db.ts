@@ -205,6 +205,37 @@ export async function updateCandidateManualOverride(
   }
 }
 
+export async function updateCandidateDecision(
+  id: string,
+  decision: Candidate['decision'],
+  reason: string = 'Quick decision from recruiter dashboard'
+): Promise<boolean> {
+  try {
+    const override = {
+      decision,
+      reason,
+      overriddenBy: 'admin@luminaryhire.com',
+      overriddenAt: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('candidates')
+      .update({
+        decision,
+        manual_override: override,
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.warn('Supabase update decision error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase update decision exception:', err);
+    return false;
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // APPLICATIONS / STATUS API
 // ────────────────────────────────────────────────────────────

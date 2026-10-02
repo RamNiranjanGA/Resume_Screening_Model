@@ -61,7 +61,8 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Clock,
   Loader, Eye, Sparkles, ArrowRight, X,
   Send, Edit3, Info, AlertCircle, Play,
-  Volume2, Mic, RefreshCw, ExternalLink
+  Volume2, Mic, RefreshCw, ExternalLink,
+  Copy, Check
 } from 'lucide-react';
 import { getSignedRecordingUrl, isSignedUrl, isStoragePath } from '@/lib/storage';
 
@@ -594,26 +595,70 @@ export default function CandidateDetailPage() {
           {/* ═══ RIGHT COLUMN ═══ */}
           <div>
 
-            {/* ── CANDIDATE INFO CARD ── */}
+            {/* ── CANDIDATE APPLICATION FORM CARD ── */}
             <div className="glass-card-static" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
-              <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1rem' }}>
-                Application Info
-              </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                  Candidate Profile Form
+                </h3>
+                <span className="badge badge-purple" style={{ fontSize: '0.7rem' }}>
+                  Verified Applicant
+                </span>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {[
-                  { icon: <User size={14} />, label: 'Name', value: candidate.name },
-                  { icon: <Mail size={14} />, label: 'Email', value: candidate.email },
-                  { icon: <Briefcase size={14} />, label: 'Job', value: candidate.jobTitle },
-                  { icon: <Calendar size={14} />, label: 'Submitted', value: `${getRelativeTime(candidate.submittedAt)} — ${new Date(candidate.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` },
-                ].map(({ icon, label, value }, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-                    <div style={{ color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}>{icon}</div>
-                    <div>
-                      <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.1rem' }}>{label}</p>
-                      <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>{value}</p>
+                {/* Name */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                  <div style={{ color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}><User size={14} /></div>
+                  <div>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.1rem' }}>Full Name</p>
+                    <p style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>{candidate.name}</p>
+                  </div>
+                </div>
+
+                {/* Email with copy & mail actions */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                  <div style={{ color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}><Mail size={14} /></div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.1rem' }}>Email Address</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <a href={`mailto:${candidate.email}`} style={{ fontSize: '0.88rem', color: '#67E8F9', textDecoration: 'none' }}>
+                        {candidate.email}
+                      </a>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Job */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                  <div style={{ color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}><Briefcase size={14} /></div>
+                  <div>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.1rem' }}>Applied Role</p>
+                    <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>{candidate.jobTitle}</p>
+                  </div>
+                </div>
+
+                {/* Submitted */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                  <div style={{ color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}><Calendar size={14} /></div>
+                  <div>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.1rem' }}>Submitted</p>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      {getRelativeTime(candidate.submittedAt)} — {new Date(candidate.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Direct email button */}
+              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '0.5rem' }}>
+                <a
+                  href={`mailto:${candidate.email}?subject=Regarding your application for ${encodeURIComponent(candidate.jobTitle)} at LuminaryHire`}
+                  className="btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center', padding: '0.55rem', fontSize: '0.82rem' }}
+                >
+                  <Mail size={13} /> Email Candidate
+                </a>
               </div>
 
               {/* Link to job */}
@@ -621,8 +666,8 @@ export default function CandidateDetailPage() {
                 <Link
                   href={`/jobs/${job.id}`}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '0.4rem',
-                    marginTop: '1.25rem', padding: '0.5rem 0.75rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                    marginTop: '0.5rem', padding: '0.5rem 0.75rem',
                     background: 'rgba(124,58,237,0.06)',
                     border: '1px solid rgba(124,58,237,0.15)',
                     borderRadius: 8, fontSize: '0.8rem', color: '#A78BFA',

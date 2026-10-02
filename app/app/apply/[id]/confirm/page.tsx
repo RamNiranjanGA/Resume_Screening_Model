@@ -150,6 +150,8 @@ export default function ConfirmationPage() {
   const searchParams = useSearchParams();
   const jobId = params.id as string;
   const token = searchParams.get('token');
+  const candidateName = searchParams.get('name') || '';
+  const candidateEmail = searchParams.get('email') || '';
 
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -326,8 +328,16 @@ export default function ConfirmationPage() {
                   icon={User}
                   color="#67E8F9"
                   label="Candidate"
-                  value="You"
+                  value={candidateName || 'Applicant'}
                 />
+                {candidateEmail && (
+                  <ConfirmationDetail
+                    icon={Mail}
+                    color="#818CF8"
+                    label="Email"
+                    value={candidateEmail}
+                  />
+                )}
                 <ConfirmationDetail
                   icon={Calendar}
                   color="#34D399"
