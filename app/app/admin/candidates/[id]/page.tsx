@@ -358,11 +358,28 @@ export default function CandidateDetailPage() {
     }
   };
 
-  // Recording playback URL (may need refresh if signed URL expires)
-  const [recordingPlayUrl, setRecordingPlayUrl] = useState<string>(
-    candidate?.recordingUrl || ''
-  );
+  // Helper to determine effective playback URL (direct signed URL or via /api/recordings/play)
+  const getEffectivePlayUrl = (rawUrl?: string, candId?: string, jId?: string) => {
+    if (!rawUrl && !candId) return '';
+    // If it's a relative storage path (e.g. job-005/cand-xxx/xxx.mp4)
+    if (rawUrl && isStoragePath(rawUrl)) {
+      return `/api/recordings/play?path=${encodeURIComponent(rawUrl)}`;
+    }
+    // If it's an HTTP URL (direct or signed)
+    if (rawUrl && rawUrl.startsWith('http')) {
+      return rawUrl;
+    }
+    // If candidateId is available, use server resolver endpoint
+    if (candId) {
+      return `/api/recordings/play?candidateId=${encodeURIComponent(candId)}${jId ? `&jobId=${encodeURIComponent(jId)}` : ''}`;
+    }
+    return rawUrl || '';
+  };
+
+  // Recording playback URL (authenticated streaming via /api/recordings/play)
+  const [recordingPlayUrl, setRecordingPlayUrl] = useState<string>('');
   const [urlRefreshing, setUrlRefreshing] = useState(false);
+  const [videoError, setVideoError] = useState(false);
 
   // Detect if the recording is video or audio based on URL/path
   const isVideoRecording = !recordingPlayUrl.includes('.mp3') &&
@@ -370,30 +387,56 @@ export default function CandidateDetailPage() {
     !recordingPlayUrl.includes('.ogg') &&
     !recordingPlayUrl.includes('.m4a');
 
-  // Refresh signed URL when it may have expired
+  // Refresh signed URL using the server-side admin storage client
   const handleRefreshUrl = async () => {
-    if (!candidate?.recordingUrl) return;
+    if (!candidate) return;
     setUrlRefreshing(true);
+    setVideoError(false);
     try {
-      const rawUrl = candidate.recordingUrl;
-      // If it's a storage path (not a full URL), generate a signed URL
-      const pathToSign = isStoragePath(rawUrl)
-        ? rawUrl
-        : rawUrl.split('/object/sign/recordings/')[1]?.split('?')[0];
-      if (pathToSign) {
-        const fresh = await getSignedRecordingUrl(pathToSign);
-        if (fresh) setRecordingPlayUrl(fresh);
+      const endpoint = `/api/recordings/play?candidateId=${encodeURIComponent(candidate.id)}${candidate.recordingUrl ? `&path=${encodeURIComponent(candidate.recordingUrl)}` : ''}&json=true&t=${Date.now()}`;
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.url) {
+          setRecordingPlayUrl(data.url);
+          if (data.path && candidate.recordingUrl !== data.path) {
+            setCandidate(prev => prev ? { ...prev, recordingUrl: data.path } : null);
+          }
+          setUrlRefreshing(false);
+          return;
+        }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Refresh URL error:', e);
+    }
+    // Fallback: force direct streaming endpoint with timestamp
+    setRecordingPlayUrl(`/api/recordings/play?candidateId=${encodeURIComponent(candidate.id)}&t=${Date.now()}`);
     setUrlRefreshing(false);
   };
 
-  // Sync playback URL when candidate loads from DB
+  // Sync playback URL when candidate loads from DB and auto-resolve if missing
   useEffect(() => {
-    if (candidate?.recordingUrl) {
-      setRecordingPlayUrl(candidate.recordingUrl);
+    if (candidate) {
+      const effective = getEffectivePlayUrl(candidate.recordingUrl, candidate.id, candidate.jobId);
+      setRecordingPlayUrl(effective);
+      setVideoError(false);
+
+      // Auto-fetch fresh signed URL from server if raw path or empty
+      if (!candidate.recordingUrl || isStoragePath(candidate.recordingUrl)) {
+        fetch(`/api/recordings/play?candidateId=${encodeURIComponent(candidate.id)}${candidate.recordingUrl ? `&path=${encodeURIComponent(candidate.recordingUrl)}` : ''}&json=true`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data?.url) {
+              setRecordingPlayUrl(data.url);
+              if (data.path && candidate.recordingUrl !== data.path) {
+                setCandidate(prev => prev ? { ...prev, recordingUrl: data.path } : null);
+              }
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [candidate?.recordingUrl]);
+  }, [candidate?.id, candidate?.recordingUrl, candidate?.jobId]);
 
   // Effective decision (override takes precedence)
   const effectiveDecision = localOverride?.decision ?? candidate?.decision ?? 'pending';
@@ -788,9 +831,12 @@ export default function CandidateDetailPage() {
                 <div>
                   {isVideoRecording ? (
                     <video
+                      key={recordingPlayUrl}
                       src={recordingPlayUrl}
                       controls
                       preload="metadata"
+                      onError={() => setVideoError(true)}
+                      onLoadedData={() => setVideoError(false)}
                       style={{
                         width: '100%', borderRadius: 10,
                         background: '#000',
@@ -805,31 +851,60 @@ export default function CandidateDetailPage() {
                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Audio Recording</span>
                       </div>
                       <audio
+                        key={recordingPlayUrl}
                         src={recordingPlayUrl}
                         controls
                         preload="metadata"
+                        onError={() => setVideoError(true)}
+                        onLoadedData={() => setVideoError(false)}
                         style={{ width: '100%' }}
                       />
                     </div>
                   )}
-                  <a
-                    href={recordingPlayUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.75rem', fontSize: '0.75rem', color: '#A78BFA', textDecoration: 'none' }}
-                  >
-                    <ExternalLink size={11} /> Open in new tab
-                  </a>
+
+                  {videoError && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.65rem 0.85rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#FCA5A5' }}>Playback expired or loading.</span>
+                      <button
+                        onClick={handleRefreshUrl}
+                        disabled={urlRefreshing}
+                        className="btn-secondary"
+                        style={{ padding: '0.3rem 0.65rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                      >
+                        <RefreshCw size={11} style={{ animation: urlRefreshing ? 'admin-spin 1s linear infinite' : 'none' }} /> Retry
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.75rem' }}>
+                    <a
+                      href={`/api/recordings/play?candidateId=${encodeURIComponent(candidate.id)}${candidate.recordingUrl ? `&path=${encodeURIComponent(candidate.recordingUrl)}` : ''}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#A78BFA', textDecoration: 'none', fontWeight: 500 }}
+                    >
+                      <ExternalLink size={11} /> Open in new tab
+                    </a>
+                  </div>
                 </div>
               ) : (
                 <div style={{ padding: '2rem 1.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 12, textAlign: 'center' }}>
                   <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
                     <Play size={20} style={{ color: '#A78BFA', marginLeft: 2 }} />
                   </div>
-                  <p style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>No Recording Available</p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    The recording URL will appear here once the candidate submits their application.
+                  <p style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>No Recording Attached</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: '0.75rem' }}>
+                    Click below to check storage for any uploaded candidate recording.
                   </p>
+                  <button
+                    onClick={handleRefreshUrl}
+                    disabled={urlRefreshing}
+                    className="btn-secondary"
+                    style={{ padding: '0.4rem 0.85rem', fontSize: '0.75rem', margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                  >
+                    <RefreshCw size={12} style={{ animation: urlRefreshing ? 'admin-spin 1s linear infinite' : 'none' }} />
+                    {urlRefreshing ? 'Searching Storage…' : 'Check Storage'}
+                  </button>
                 </div>
               )}
             </div>

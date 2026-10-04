@@ -93,20 +93,25 @@ export async function uploadRecording(
 
     onProgress?.(95);
 
-    // Generate a signed URL so recruiters can access it
-    const { data: signed, error: signErr } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(data.path, SIGNED_URL_EXPIRY_SECS);
+    // Try generating a signed URL via client if available
+    let signedUrl = '';
+    try {
+      const { data: signed } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(data.path, SIGNED_URL_EXPIRY_SECS);
+      if (signed?.signedUrl) {
+        signedUrl = signed.signedUrl;
+      }
+    } catch {}
+
+    // Fallback: If client signing fails (e.g. anonymous RLS), provide the server streaming endpoint
+    if (!signedUrl) {
+      signedUrl = `/api/recordings/play?path=${encodeURIComponent(data.path)}`;
+    }
 
     onProgress?.(100);
 
-    if (signErr || !signed?.signedUrl) {
-      console.warn('Could not create signed URL:', signErr?.message);
-      // Return the path so we can regenerate later
-      return { path: data.path, signedUrl: '' };
-    }
-
-    return { path: data.path, signedUrl: signed.signedUrl };
+    return { path: data.path, signedUrl };
   } catch (err) {
     console.warn('uploadRecording exception:', err);
     onProgress?.(100);
@@ -120,18 +125,26 @@ export async function getSignedRecordingUrl(
   expirySeconds = SIGNED_URL_EXPIRY_SECS
 ): Promise<string | null> {
   try {
+    // Try server-side authenticated signing endpoint first
+    try {
+      const res = await fetch(`/api/recordings/play?path=${encodeURIComponent(storagePath)}&json=true`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.url) return json.url;
+      }
+    } catch {}
+
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .createSignedUrl(storagePath, expirySeconds);
 
     if (error || !data?.signedUrl) {
-      console.warn('getSignedRecordingUrl error:', error?.message);
-      return null;
+      return `/api/recordings/play?path=${encodeURIComponent(storagePath)}`;
     }
     return data.signedUrl;
   } catch {
-    return null;
+    return `/api/recordings/play?path=${encodeURIComponent(storagePath)}`;
   }
 }
 

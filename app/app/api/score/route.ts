@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { downloadRecordingBuffer, findRecordingForCandidate } from '@/lib/supabase-admin';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -122,44 +123,43 @@ async function fetchMediaBuffer(recordingUrl: string): Promise<{ buffer: Buffer;
   try {
     if (!recordingUrl) return null;
 
-    let arrayBuffer: ArrayBuffer | null = null;
-    let mimeType = 'video/mp4';
+    // 1. If it's a direct Supabase storage path
+    if (!recordingUrl.startsWith('http') && !recordingUrl.startsWith('/recordings/cand-')) {
+      const downloaded = await downloadRecordingBuffer(recordingUrl);
+      if (downloaded) return downloaded;
+    }
 
+    // 2. If it's an HTTP URL (e.g. signed Supabase URL)
     if (recordingUrl.startsWith('http')) {
-      const res = await fetch(recordingUrl, { signal: AbortSignal.timeout(30000) });
-      if (!res.ok) {
-        console.warn('Failed to fetch recording URL HTTP:', res.status);
-        return null;
+      try {
+        const res = await fetch(recordingUrl, { signal: AbortSignal.timeout(30000) });
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          let mimeType = res.headers.get('content-type') || 'video/mp4';
+          if (mimeType.includes('octet-stream')) {
+            const lower = recordingUrl.toLowerCase();
+            if (lower.includes('.webm')) mimeType = 'video/webm';
+            else if (lower.includes('.mp4')) mimeType = 'video/mp4';
+            else if (lower.includes('.mp3')) mimeType = 'audio/mp3';
+            else if (lower.includes('.wav')) mimeType = 'audio/wav';
+          }
+          return { buffer: Buffer.from(arrayBuffer), mimeType: mimeType.split(';')[0] };
+        }
+      } catch (fetchErr) {
+        console.warn('HTTP fetch failed, attempting authenticated storage download:', fetchErr);
       }
-      arrayBuffer = await res.arrayBuffer();
-      const headerType = res.headers.get('content-type');
-      if (headerType && !headerType.includes('octet-stream')) {
-        mimeType = headerType.split(';')[0];
+
+      // If HTTP fetch failed (e.g. expired signed URL), extract storage path and download via admin client
+      const match = recordingUrl.match(/\/recordings\/([^?]+)/);
+      if (match && match[1]) {
+        const extractedPath = decodeURIComponent(match[1]);
+        const downloaded = await downloadRecordingBuffer(extractedPath);
+        if (downloaded) return downloaded;
       }
-    } else {
-      // Storage path in "recordings" bucket
-      const { data, error } = await supabase.storage.from('recordings').download(recordingUrl);
-      if (error || !data) {
-        console.warn('Failed to download recording from Supabase bucket:', error?.message);
-        return null;
-      }
-      arrayBuffer = await data.arrayBuffer();
-      if (data.type) mimeType = data.type;
     }
 
-    if (!arrayBuffer || arrayBuffer.byteLength === 0) return null;
-
-    // Detect format if generic octet-stream
-    if (mimeType.includes('octet-stream') || mimeType === 'video/webm') {
-      const lower = recordingUrl.toLowerCase();
-      if (lower.includes('.mp4')) mimeType = 'video/mp4';
-      else if (lower.includes('.webm')) mimeType = 'video/webm';
-      else if (lower.includes('.mp3')) mimeType = 'audio/mp3';
-      else if (lower.includes('.wav')) mimeType = 'audio/wav';
-      else if (lower.includes('.mov')) mimeType = 'video/quicktime';
-    }
-
-    return { buffer: Buffer.from(arrayBuffer), mimeType };
+    // 3. Fallback: try admin client directly with whatever path was provided
+    return await downloadRecordingBuffer(recordingUrl);
   } catch (err) {
     console.warn('fetchMediaBuffer exception:', err);
     return null;
@@ -379,13 +379,25 @@ export async function POST(req: NextRequest) {
       try {
         const { data: cand } = await supabase
           .from('candidates')
-          .select('recording_url')
+          .select('recording_url, job_id')
           .eq('id', candidateId)
           .maybeSingle();
         if (cand?.recording_url) {
           finalRecordingUrl = cand.recording_url;
+        } else {
+          // Check if candidate uploaded a file to Supabase storage
+          const discovered = await findRecordingForCandidate(candidateId, jobId || cand?.job_id);
+          if (discovered) {
+            finalRecordingUrl = discovered;
+            await supabase
+              .from('candidates')
+              .update({ recording_url: discovered })
+              .eq('id', candidateId);
+          }
         }
-      } catch {}
+      } catch (findErr) {
+        console.warn('Candidate recording lookup exception:', findErr);
+      }
     }
 
     let scoreResult: { score: number; reasoning: string; transcript: string; decision: string } | null = null;
