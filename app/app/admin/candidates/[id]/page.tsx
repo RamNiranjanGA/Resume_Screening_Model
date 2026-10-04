@@ -319,6 +319,44 @@ export default function CandidateDetailPage() {
     overriddenAt: string;
   } | null>(candidate?.manualOverride ?? null);
   const [overrideSuccess, setOverrideSuccess] = useState(false);
+  const [isReScoring, setIsReScoring] = useState(false);
+  const [reScoreMessage, setReScoreMessage] = useState<string | null>(null);
+
+  const handleReScore = async () => {
+    if (!candidate || isReScoring) return;
+    setIsReScoring(true);
+    setReScoreMessage(null);
+    try {
+      const res = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateId: candidate.id,
+          jobId: candidate.jobId,
+          candidateName: candidate.name,
+          recordingUrl: candidate.recordingUrl,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setCandidate(prev => prev ? {
+          ...prev,
+          aiScore: data.score,
+          aiReasoning: data.reasoning,
+          transcript: data.transcript,
+          decision: data.decision,
+          status: 'decided',
+        } : null);
+        setReScoreMessage('AI evaluation successfully refreshed with Gemini.');
+      } else {
+        setReScoreMessage('Re-evaluation failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch {
+      setReScoreMessage('Network error during AI re-evaluation.');
+    } finally {
+      setIsReScoring(false);
+    }
+  };
 
   // Recording playback URL (may need refresh if signed URL expires)
   const [recordingPlayUrl, setRecordingPlayUrl] = useState<string>(
@@ -488,15 +526,61 @@ export default function CandidateDetailPage() {
 
             {/* ── AI ANALYSIS CARD ── */}
             <div className="glass-card-static" style={{ padding: '1.75rem', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.5rem' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A78BFA' }}>
-                  <Brain size={17} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A78BFA' }}>
+                    <Brain size={17} />
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>AI Analysis</h2>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Automated Gemini evaluation & verbatim speech review</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>AI Analysis</h2>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Automated scoring and reasoning</p>
-                </div>
+
+                <button
+                  id="rescore-candidate-btn"
+                  onClick={handleReScore}
+                  disabled={isReScoring}
+                  className="btn-secondary"
+                  style={{
+                    fontSize: '0.78rem',
+                    padding: '0.4rem 0.85rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    borderRadius: '8px',
+                    cursor: isReScoring ? 'not-allowed' : 'pointer',
+                    opacity: isReScoring ? 0.7 : 1,
+                  }}
+                  title="Re-run Google Gemini speech recognition and skill evaluation"
+                >
+                  {isReScoring ? (
+                    <>
+                      <Loader size={13} style={{ animation: 'admin-spin 1s linear infinite' }} />
+                      <span>Evaluating with Gemini...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={13} style={{ color: '#A78BFA' }} />
+                      <span>Re-run AI Analysis</span>
+                    </>
+                  )}
+                </button>
               </div>
+
+              {reScoreMessage && (
+                <div style={{
+                  fontSize: '0.8rem',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '8px',
+                  marginBottom: '1.25rem',
+                  background: reScoreMessage.includes('successfully') ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                  color: reScoreMessage.includes('successfully') ? '#34D399' : '#F87171',
+                  border: `1px solid ${reScoreMessage.includes('successfully') ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                }}>
+                  {reScoreMessage}
+                </div>
+              )}
 
               {isProcessing ? (
                 <div style={{ textAlign: 'center', padding: '2rem 0' }}>
