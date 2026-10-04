@@ -37,6 +37,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getJobById } from '@/lib/mock-data';
+import { fetchJobById } from '@/lib/db';
 import { Job } from '@/lib/types';
 import {
   Shield, ShieldCheck, Lock, Eye, Clock, Trash2,
@@ -189,17 +190,32 @@ export default function ConsentPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // ── Fetch the job on mount ──
-  // In production: replace with an API call.
-  // We use useEffect + mock lookup to simulate async data loading.
+  // ── Fetch the job on mount (from Supabase DB with mock fallback) ──
   useEffect(() => {
-    const foundJob = getJobById(jobId);
-    if (foundJob) {
-      setJob(foundJob);
-    } else {
-      setNotFound(true);
-    }
-    setLoading(false);
+    let mounted = true;
+    fetchJobById(jobId)
+      .then(foundJob => {
+        if (!mounted) return;
+        if (foundJob) {
+          setJob(foundJob);
+        } else {
+          const local = getJobById(jobId);
+          if (local) setJob(local);
+          else setNotFound(true);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        const local = getJobById(jobId);
+        if (local) setJob(local);
+        else setNotFound(true);
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [jobId]);
 
   // ── Loading state ──

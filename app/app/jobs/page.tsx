@@ -248,6 +248,20 @@ export default function JobsPage() {
     setTypeFilter('all');
   }
 
+  // Dynamic locations list merging mock jobs and newly posted jobs
+  const allLocations = useMemo(() => {
+    return [
+      'All Locations',
+      ...Array.from(
+        new Set(
+          [...MOCK_JOBS, ...jobs]
+            .map(j => j.location)
+            .filter(loc => loc && !JOB_TYPE_WORDS.has(loc.toLowerCase()))
+        )
+      ).sort(),
+    ];
+  }, [jobs]);
+
   return (
     <>
       <Header />
@@ -325,7 +339,7 @@ export default function JobsPage() {
                   aria-label="Filter by location"
                   style={{ paddingLeft: '2.2rem' }}
                 >
-                  {ALL_LOCATIONS.map(loc => (
+                  {allLocations.map(loc => (
                     <option key={loc} value={loc}>{loc}</option>
                   ))}
                 </select>

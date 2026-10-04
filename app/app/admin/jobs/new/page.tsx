@@ -81,7 +81,7 @@ import {
   Briefcase, MapPin, Clock, DollarSign, FileText, Users,
   CheckSquare, Star, Save, Send, X, Plus, ArrowRight,
   AlertCircle, CheckCircle2, Loader, Info, Sparkles,
-  Building2, ChevronDown, Eye, Zap
+  Building2, ChevronDown, Eye, Zap, Copy, Check, ExternalLink
 } from 'lucide-react';
 import { JobType } from '@/lib/types';
 import { createJob } from '@/lib/db';
@@ -517,10 +517,30 @@ function PreviewJobCard({ data }: { data: FormData }) {
 // ─────────────────────────────────────────────
 // SUCCESS SCREEN
 // ─────────────────────────────────────────────
-function SuccessScreen({ jobTitle, onViewAll }: { jobTitle: string; onViewAll: () => void }) {
+function SuccessScreen({
+  jobTitle,
+  jobId,
+  onViewAll,
+}: {
+  jobTitle: string;
+  jobId?: string;
+  onViewAll: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const publicUrl = jobId
+    ? (typeof window !== 'undefined' ? `${window.location.origin}/jobs/${jobId}` : `/jobs/${jobId}`)
+    : '';
+
+  const handleCopy = () => {
+    if (!publicUrl) return;
+    navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem 2rem' }}>
-      <div style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
+      <div style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
         {/* Big check */}
         <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', border: '2px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', boxShadow: '0 0 30px rgba(16,185,129,0.25)' }}>
           <CheckCircle2 size={40} color="#34D399" />
@@ -534,9 +554,57 @@ function SuccessScreen({ jobTitle, onViewAll }: { jobTitle: string; onViewAll: (
         <h1 style={{ fontSize: '1.8rem', fontWeight: 900, marginBottom: '0.75rem', letterSpacing: '-0.02em' }}>
           {`"${jobTitle}" is now live!`}
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.7, marginBottom: '2rem', maxWidth: 400, margin: '0 auto 2rem' }}>
-          Your job listing is now visible to candidates on LuminaryHire. Applications will flow in through the AI-powered screening pipeline.
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.7, marginBottom: '1.5rem', maxWidth: 440, margin: '0 auto 1.5rem' }}>
+          Your job listing is immediately accessible to candidates on LuminaryHire. Anyone with the link can view requirements and apply with their video intro.
         </p>
+
+        {jobId && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 12,
+            padding: '1rem 1.25rem',
+            marginBottom: '2rem',
+            textAlign: 'left'
+          }}>
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Candidate Application URL
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                readOnly
+                value={publicUrl}
+                style={{
+                  flex: 1,
+                  minWidth: 220,
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 8,
+                  padding: '0.55rem 0.75rem',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleCopy}
+                className="btn-secondary"
+                style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                {copied ? <Check size={14} color="#34D399" /> : <Copy size={14} />}
+                {copied ? 'Copied!' : 'Copy Link'}
+              </button>
+              <Link
+                href={`/jobs/${jobId}`}
+                target="_blank"
+                className="btn-secondary"
+                style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <ExternalLink size={14} /> View Role
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
@@ -556,7 +624,7 @@ function SuccessScreen({ jobTitle, onViewAll }: { jobTitle: string; onViewAll: (
 
         <p style={{ marginTop: '1.5rem', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
           <Info size={12} />
-          AI screening begins automatically once the first candidate applies.
+          AI screening begins automatically as soon as a candidate submits their recording.
         </p>
       </div>
     </div>
@@ -586,6 +654,7 @@ export default function PostJobPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<FormStatus>('idle');
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [publishedJobId, setPublishedJobId] = useState('');
 
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -672,7 +741,7 @@ export default function PostJobPage() {
     }
 
     setStatus('publishing');
-    await createJob({
+    const created = await createJob({
       title: form.title,
       company: form.company,
       department: form.department,
@@ -686,6 +755,9 @@ export default function PostJobPage() {
       mustHaveSkills: form.mustHaveSkills,
       status: 'published',
     });
+    if (created?.id) {
+      setPublishedJobId(created.id);
+    }
     setStatus('published');
   };
 
@@ -697,7 +769,11 @@ export default function PostJobPage() {
     return (
       <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         <AdminSidebar />
-        <SuccessScreen jobTitle={form.title} onViewAll={() => router.push('/admin/candidates')} />
+        <SuccessScreen
+          jobTitle={form.title}
+          jobId={publishedJobId}
+          onViewAll={() => router.push('/admin/candidates')}
+        />
       </div>
     );
   }

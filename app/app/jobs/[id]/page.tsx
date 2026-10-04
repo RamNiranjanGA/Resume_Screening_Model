@@ -50,10 +50,10 @@ export async function generateMetadata(
   };
 }
 
-// ── Pre-generate all known job pages at build time ──
-export async function generateStaticParams() {
-  return MOCK_JOBS.map(job => ({ id: job.id }));
-}
+// ── Dynamic page rendering — ensures newly posted jobs are always immediately available ──
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+export const revalidate = 0;
 
 // ── Type badge colours ──
 const TYPE_STYLES: Record<JobType, { bg: string; text: string; border: string; label: string }> = {
